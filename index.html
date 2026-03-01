@@ -1,0 +1,1287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:;">
+  <title>PrivateKeyConvert — Private Key Format Converter</title>
+  <style>
+    :root {
+      --bg-primary: #0a0e17;
+      --bg-secondary: #111827;
+      --bg-card: #1a2235;
+      --bg-card-hover: #1f2a40;
+      --bg-input: #0f1624;
+      --border: #1e3050;
+      --border-hover: #2d4a7a;
+      --text-primary: #e2e8f0;
+      --text-secondary: #8899b4;
+      --text-muted: #576882;
+      --accent: #3b82f6;
+      --accent-hover: #60a5fa;
+      --bitcoin: #f7931a;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --purple: #a855f7;
+      --cyan: #00ffff;
+      --blue-back: #2269ee25;
+      --blue: #2186fa;
+      --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', 'Monaco', 'Courier New', monospace;
+      --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif;
+      --radius: 8px;
+      --radius-sm: 5px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { font-size: 15px; }
+
+    body {
+      font-family: var(--font-ui);
+      background-color: var(--bg-primary);
+      background-image:
+        linear-gradient(rgba(59,130,246,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59,130,246,0.025) 1px, transparent 1px);
+      background-size: 44px 44px;
+      color: var(--text-primary);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* ── Security Status Bar ── */
+    .security-bar {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 6px 16px; font-size: 0.75rem; font-weight: 600;
+      letter-spacing: 0.05em; text-transform: uppercase;
+      transition: background 0.4s;
+    }
+    .security-bar.online  { background: linear-gradient(90deg, #7f1d1d, #991b1b, #7f1d1d); color: #fca5a5; }
+    .security-bar.offline { background: linear-gradient(90deg, #052e16, #14532d, #052e16); color: #86efac; }
+    .security-bar svg { flex-shrink: 0; }
+
+    /* ── Warning Banner ── */
+    .warning-banner {
+      background: linear-gradient(135deg, #451a03 0%, #78350f 100%);
+      border-bottom: 1px solid #92400e;
+      padding: 10px 20px; text-align: center; font-size: 0.82rem;
+      color: #fde68a; display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .warning-banner.hidden { display: none; }
+
+    /* ── Header ── */
+    header {
+      text-align: center; padding: 32px 20px 24px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(59,130,246,0.06) 0%, transparent 100%);
+    }
+    .logo { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .logo svg { color: var(--accent); }
+    .logo h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.02em; }
+    .logo h1 span { color: var(--accent); }
+    .logo .subtitle { color: var(--text-secondary); font-size: 0.9rem; font-weight: 400; }
+    .logo .version { color: var(--text-muted); font-size: 0.72rem; margin-top: 2px; letter-spacing: 0.04em; }
+    .logo .mmdrza { color: var(--blue); font-size: 0.72rem; margin-top: 2px; letter-spacing: 0.04em; background-color: var(--blue-back); border-radius: 3px; padding: 1px 12px; font-family: var(--font-mono); }
+
+    /* ── Main Container ── */
+    main { max-width: 900px; margin: 0 auto; padding: 24px 16px 40px; }
+
+    /* ── Sections ── */
+    section { margin-bottom: 24px; }
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 12px; flex-wrap: wrap; gap: 8px;
+    }
+    .section-header h2 { font-size: 1rem; font-weight: 600; color: var(--text-primary); }
+
+    /* ── Format Badge ── */
+    .format-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 10px; border-radius: 20px; font-size: 0.72rem;
+      font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
+      border: 1px solid transparent; transition: all 0.3s;
+    }
+    .format-badge.detected { background: rgba(59,130,246,0.15); border-color: var(--accent); color: var(--accent-hover); }
+    .format-badge.error    { background: rgba(239,68,68,0.15); border-color: var(--danger); color: #fca5a5; }
+
+    /* ── Input Area ── */
+    .input-wrap {
+      position: relative; background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden; transition: border-color 0.3s;
+    }
+    .input-wrap:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+    #keyInput {
+      width: 100%; min-height: 88px; padding: 14px; resize: vertical;
+      background: transparent; border: none; outline: none;
+      color: var(--text-primary); font-family: var(--font-mono); font-size: 0.88rem;
+      line-height: 1.6; word-break: break-all;
+    }
+    #keyInput::placeholder { color: var(--text-muted); font-family: var(--font-ui); }
+
+    /* ── Action Buttons Row ── */
+    .actions-row {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px;
+    }
+    button {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+      background: var(--bg-card); color: var(--text-primary);
+      font-family: var(--font-ui); font-size: 0.82rem; font-weight: 500;
+      cursor: pointer; transition: all 0.2s; white-space: nowrap;
+    }
+    button:hover { background: var(--bg-card-hover); border-color: var(--border-hover); transform: translateY(-1px); }
+    button:active { transform: translateY(0); }
+    button svg { flex-shrink: 0; }
+    .btn-generate { border-color: rgba(59,130,246,0.4); color: var(--accent-hover); }
+    .btn-generate:hover { background: rgba(59,130,246,0.12); }
+    .btn-clear { border-color: rgba(239,68,68,0.4); color: #fca5a5; }
+    .btn-clear:hover { background: rgba(239,68,68,0.12); }
+    .btn-visibility { margin-left: auto; }
+
+    /* ── Network Toggle ── */
+    .network-toggle {
+      display: flex; align-items: center; gap: 2px;
+      background: var(--bg-input); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); overflow: hidden; font-size: 0.78rem;
+    }
+    .network-toggle label {
+      padding: 6px 14px; cursor: pointer; transition: all 0.2s;
+      color: var(--text-secondary); user-select: none; font-weight: 500;
+    }
+    .network-toggle input { display: none; }
+    .network-toggle input:checked + span {
+      background: rgba(59,130,246,0.18); color: var(--accent-hover);
+    }
+    .network-toggle label:has(input:checked) {
+      background: rgba(59,130,246,0.18); color: var(--accent-hover);
+    }
+
+    /* ── Validation Message ── */
+    .validation {
+      margin-top: 8px; padding: 8px 12px; border-radius: var(--radius-sm);
+      font-size: 0.8rem; display: none; align-items: center; gap: 6px;
+    }
+    .validation.show { display: flex; }
+    .validation.valid   { background: rgba(34,197,94,0.1); color: #86efac; border: 1px solid rgba(34,197,94,0.3); }
+    .validation.invalid { background: rgba(239,68,68,0.1); color: #fca5a5; border: 1px solid rgba(239,68,68,0.3); }
+
+    /* ── Entropy Bar ── */
+    .entropy-container {
+      display: none; align-items: center; gap: 10px; margin-top: 10px; font-size: 0.78rem;
+    }
+    .entropy-container.show { display: flex; }
+    .entropy-container label { color: var(--text-secondary); white-space: nowrap; font-weight: 500; }
+    .entropy-track {
+      flex: 1; height: 6px; background: var(--bg-input);
+      border-radius: 3px; overflow: hidden; border: 1px solid var(--border);
+    }
+    .entropy-fill {
+      height: 100%; border-radius: 3px; transition: width 0.5s ease, background 0.5s;
+    }
+    .entropy-value { color: var(--text-secondary); white-space: nowrap; font-family: var(--font-mono); font-size: 0.74rem; }
+
+    /* ── Output Grid ── */
+    .outputs-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+      gap: 12px;
+    }
+
+    /* ── Format Card ── */
+    .format-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden; transition: border-color 0.3s;
+      border-left: 3px solid var(--card-accent, var(--accent));
+    }
+    .format-card:hover { border-color: var(--border-hover); }
+    .card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 14px 0;
+    }
+    .card-label {
+      font-size: 0.74rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--text-secondary);
+    }
+    .card-label .info-icon {
+      display: inline-block; width: 14px; height: 14px; line-height: 14px;
+      text-align: center; border-radius: 50%; font-size: 9px;
+      background: rgba(136,153,180,0.15); color: var(--text-muted);
+      margin-left: 5px; cursor: help; vertical-align: middle; font-style: normal;
+    }
+    .copy-btn {
+      padding: 4px 8px; font-size: 0.7rem; border: none;
+      background: transparent; color: var(--text-muted);
+    }
+    .copy-btn:hover { color: var(--accent-hover); background: rgba(59,130,246,0.1); }
+    .copy-btn.copied { color: var(--success); }
+    .card-value {
+      padding: 8px 14px 12px; font-family: var(--font-mono); font-size: 0.82rem;
+      color: var(--text-primary); word-break: break-all; line-height: 1.5;
+      min-height: 38px; transition: filter 0.3s;
+    }
+    .card-value.blurred { filter: blur(6px); user-select: none; pointer-events: none; }
+    .card-value.empty { color: var(--text-muted); font-family: var(--font-ui); font-style: italic; font-size: 0.78rem; }
+
+    /* ── Derived Section ── */
+    .derived-toggle {
+      display: flex; align-items: center; gap: 8px; cursor: pointer;
+      padding: 12px 16px; background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); user-select: none; transition: all 0.3s;
+      width: 100%;
+    }
+    .derived-toggle:hover { border-color: var(--border-hover); background: var(--bg-card-hover); }
+    .derived-toggle h2 { font-size: 0.9rem; }
+    .derived-toggle .chevron {
+      transition: transform 0.3s; font-size: 0.8rem; color: var(--text-muted);
+    }
+    .derived-toggle.open .chevron { transform: rotate(90deg); }
+    .derived-content {
+      display: none; margin-top: 12px;
+    }
+    .derived-content.show { display: block; }
+    .derived-grid {
+      display: grid; grid-template-columns: 1fr; gap: 10px;
+    }
+    .derived-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); border-left: 3px solid var(--accent);
+    }
+    .derived-card .card-header { padding: 8px 14px 0; }
+    .derived-card .card-value  { padding: 6px 14px 10px; font-size: 0.8rem; }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center; padding: 24px 16px 32px;
+      border-top: 1px solid var(--border); margin-top: 16px;
+    }
+    .footer-security {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      color: var(--text-muted); font-size: 0.78rem; margin-bottom: 6px;
+    }
+    .footer-shortcuts {
+      color: var(--text-muted); font-size: 0.72rem;
+    }
+    .footer-shortcuts kbd {
+      background: var(--bg-card); border: 1px solid var(--border);
+      padding: 2px 6px; border-radius: 3px; font-family: var(--font-mono);
+      font-size: 0.7rem;
+    }
+    .footer-disclaimer {
+      color: var(--text-muted); font-size: 0.68rem; margin-top: 10px;
+      max-width: 540px; margin-left: auto; margin-right: auto; line-height: 1.5;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 520px) {
+      .outputs-grid { grid-template-columns: 1fr; }
+      .actions-row { flex-direction: column; align-items: stretch; }
+      .btn-visibility { margin-left: 0; }
+      .network-toggle { justify-content: center; }
+      header { padding: 24px 16px 18px; }
+      .logo h1 { font-size: 1.4rem; }
+    }
+
+    /* ── Animations ── */
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeIn 0.3s ease forwards; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+    /* ── Noscript ── */
+    .noscript-msg {
+      text-align: center; padding: 40px; color: var(--danger); font-size: 1.1rem;
+    }
+
+    /* tooltip via title is fine, but let's add custom for format labels */
+    [data-tooltip] { position: relative; }
+    [data-tooltip]:hover::after {
+      content: attr(data-tooltip);
+      position: absolute; bottom: calc(100% + 6px); left: 50%;
+      transform: translateX(-50%); padding: 5px 10px;
+      background: #1e293b; color: var(--text-secondary);
+      font-size: 0.7rem; border-radius: 4px; white-space: nowrap;
+      border: 1px solid var(--border); pointer-events: none; z-index: 10;
+      font-family: var(--font-ui); text-transform: none; letter-spacing: normal; font-weight: 400;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/><circle cx="12" cy="16" r="1"/></svg>
+      <h1>PrivateKey<span>Convert</span></h1>
+      <div class="subtitle">Private Key Format Converter</div>
+      <div class="version">v1.0 &bull; 100% Client-Side &bull; Zero Network Requests</div>
+	  <div class="mmdrza">Mmdrza.Com &bull; Github.Com/Pymmdrza</div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Input Section -->
+    <section>
+      <div class="section-header">
+        <h2>&#128273; Input Private Key</h2>
+        <span class="format-badge" id="formatBadge"></span>
+      </div>
+      <div class="input-wrap">
+        <textarea id="keyInput" placeholder="Paste or type your private key in any supported format (Hex, WIF, Base64, Decimal, Binary, Mini)..." autocomplete="off" spellcheck="false" autocorrect="off" autocapitalize="off"></textarea>
+      </div>
+      <div class="actions-row">
+        <button class="btn-generate" id="generateBtn" title="Generate a cryptographically secure random private key">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 002 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0022 16z"/><polyline points="7.5 4.21 12 6.81 16.5 4.21"/><polyline points="7.5 19.79 7.5 14.6 3 12"/><polyline points="21 12 16.5 14.6 16.5 19.79"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+          Generate Random Key
+        </button>
+        <button class="btn-clear" id="clearBtn" title="Clear all fields and wipe memory (Ctrl+Shift+Delete)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+          Clear All
+        </button>
+        <button class="btn-visibility" id="visibilityBtn" title="Toggle value visibility">
+          <svg id="eyeIcon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span id="visLabel">Hide Values</span>
+        </button>
+        <div class="network-toggle">
+          <label><input type="radio" name="network" value="mainnet" checked><span>Mainnet</span></label>
+          <label><input type="radio" name="network" value="testnet"><span>Testnet</span></label>
+        </div>
+      </div>
+      <div class="validation" id="validationMsg"></div>
+      <div class="entropy-container" id="entropyContainer">
+        <label>Entropy:</label>
+        <div class="entropy-track"><div class="entropy-fill" id="entropyFill"></div></div>
+        <span class="entropy-value" id="entropyValue"></span>
+      </div>
+    </section>
+
+    <!-- Output Formats -->
+    <section>
+      <div class="section-header"><h2>&#128260; Converted Formats</h2></div>
+      <div class="outputs-grid" id="outputsGrid"></div>
+    </section>
+
+    <!-- Derived Keys & Addresses -->
+    <section>
+      <div class="derived-toggle" id="derivedToggle">
+        <span class="chevron">&#9654;</span>
+        <h2>Derived Keys &amp; Addresses</h2>
+      </div>
+      <div class="derived-content" id="derivedContent">
+        <div class="derived-grid" id="derivedGrid"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="footer-security">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      This tool runs entirely in your browser. No data is ever transmitted.
+    </div>
+    <div class="footer-shortcuts">
+      Panic clear: <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Delete</kbd>
+    </div>
+    <div class="footer-disclaimer">
+      Programmer and Owner : <a href="https://mmdrza.com" target="_blank" rel="noopener noreferrer" style="color: var(--accent); text-decoration: underline;">Mmdrza.Com</a>
+    </div>
+  </footer>
+
+  <noscript><div class="noscript-msg">JavaScript is required for this tool to function.</div></noscript>
+
+<script>
+"use strict";
+
+/* ================================================================
+   SECTION 1 — SHA-256 (synchronous, pure JS)
+   ================================================================ */
+const SHA256_K = new Uint32Array([
+  0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+  0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+  0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+  0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+  0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+  0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+  0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+  0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
+]);
+
+function rotr32(x, n) { return ((x >>> n) | (x << (32 - n))) >>> 0; }
+
+function sha256(msg) {
+  const len = msg.length;
+  const bitLen = len * 8;
+  const padLen = (((len + 9) + 63) & ~63);
+  const buf = new ArrayBuffer(padLen);
+  const padded = new Uint8Array(buf);
+  padded.set(msg);
+  padded[len] = 0x80;
+  const dv = new DataView(buf);
+  dv.setUint32(padLen - 4, bitLen & 0xffffffff);
+  dv.setUint32(padLen - 8, Math.floor(bitLen / 0x100000000));
+
+  let H0=0x6a09e667, H1=0xbb67ae85, H2=0x3c6ef372, H3=0xa54ff53a;
+  let H4=0x510e527f, H5=0x9b05688c, H6=0x1f83d9ab, H7=0x5be0cd19;
+  const W = new Uint32Array(64);
+
+  for (let off = 0; off < padLen; off += 64) {
+    for (let i = 0; i < 16; i++) W[i] = dv.getUint32(off + i * 4);
+    for (let i = 16; i < 64; i++) {
+      const s0 = (rotr32(W[i-15],7) ^ rotr32(W[i-15],18) ^ (W[i-15]>>>3)) >>> 0;
+      const s1 = (rotr32(W[i-2],17) ^ rotr32(W[i-2],19) ^ (W[i-2]>>>10)) >>> 0;
+      W[i] = (W[i-16] + s0 + W[i-7] + s1) >>> 0;
+    }
+    let a=H0,b=H1,c=H2,d=H3,e=H4,f=H5,g=H6,h=H7;
+    for (let i = 0; i < 64; i++) {
+      const S1 = (rotr32(e,6) ^ rotr32(e,11) ^ rotr32(e,25)) >>> 0;
+      const ch = ((e & f) ^ ((~e) & g)) >>> 0;
+      const t1 = (h + S1 + ch + SHA256_K[i] + W[i]) >>> 0;
+      const S0 = (rotr32(a,2) ^ rotr32(a,13) ^ rotr32(a,22)) >>> 0;
+      const maj = ((a & b) ^ (a & c) ^ (b & c)) >>> 0;
+      const t2 = (S0 + maj) >>> 0;
+      h=g; g=f; f=e; e=(d+t1)>>>0; d=c; c=b; b=a; a=(t1+t2)>>>0;
+    }
+    H0=(H0+a)>>>0; H1=(H1+b)>>>0; H2=(H2+c)>>>0; H3=(H3+d)>>>0;
+    H4=(H4+e)>>>0; H5=(H5+f)>>>0; H6=(H6+g)>>>0; H7=(H7+h)>>>0;
+  }
+  const res = new Uint8Array(32);
+  const rv = new DataView(res.buffer);
+  rv.setUint32(0,H0); rv.setUint32(4,H1); rv.setUint32(8,H2);  rv.setUint32(12,H3);
+  rv.setUint32(16,H4); rv.setUint32(20,H5); rv.setUint32(24,H6); rv.setUint32(28,H7);
+  return res;
+}
+
+function doubleSha256(data) { return sha256(sha256(data)); }
+
+/* ================================================================
+   SECTION 2 — RIPEMD-160 (synchronous, pure JS)
+   ================================================================ */
+const RMD_RL = [
+  0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,
+  7,4,13,1,10,6,15,3,12,0,9,5,2,14,11,8,
+  3,10,14,4,9,15,8,1,2,7,0,6,13,11,5,12,
+  1,9,11,10,0,8,12,4,13,3,7,15,14,5,6,2,
+  4,0,5,9,7,12,2,10,14,1,3,8,11,6,15,13
+];
+const RMD_RR = [
+  5,14,7,0,9,2,11,4,13,6,15,8,1,10,3,12,
+  6,11,3,7,0,13,5,10,14,15,8,12,4,9,1,2,
+  15,5,1,3,7,14,6,9,11,8,12,2,10,0,4,13,
+  8,6,4,1,3,11,15,0,5,12,2,13,9,7,10,14,
+  12,15,10,4,1,5,8,7,6,2,13,14,0,3,9,11
+];
+const RMD_SL = [
+  11,14,15,12,5,8,7,9,11,13,14,15,6,7,9,8,
+  7,6,8,13,11,9,7,15,7,12,15,9,11,7,13,12,
+  11,13,6,7,14,9,13,15,14,8,13,6,5,12,7,5,
+  11,12,14,15,14,15,9,8,9,14,5,6,8,6,5,12,
+  9,15,5,11,6,8,13,12,5,12,13,14,11,8,5,6
+];
+const RMD_SR = [
+  8,9,9,11,13,15,15,5,7,7,8,11,14,14,12,6,
+  9,13,15,7,12,8,9,11,7,7,12,7,6,15,13,11,
+  9,7,15,11,8,6,6,14,12,13,5,14,13,13,7,5,
+  15,5,8,11,14,14,6,14,6,9,12,9,12,5,15,8,
+  8,5,12,9,12,5,14,6,8,13,6,5,15,13,11,11
+];
+const RMD_KL = [0x00000000, 0x5a827999, 0x6ed9eba1, 0x8f1bbcdc, 0xa953fd4e];
+const RMD_KR = [0x50a28be6, 0x5c4dd124, 0x6d703ef3, 0x7a6d76e9, 0x00000000];
+
+function rotl32(x, n) { return ((x << n) | (x >>> (32 - n))) >>> 0; }
+
+function rmdF(j, x, y, z) {
+  if (j < 16) return (x ^ y ^ z) >>> 0;
+  if (j < 32) return ((x & y) | ((~x) & z)) >>> 0;
+  if (j < 48) return ((x | (~y)) ^ z) >>> 0;
+  if (j < 64) return ((x & z) | (y & (~z))) >>> 0;
+  return (x ^ (y | (~z))) >>> 0;
+}
+
+function ripemd160(msg) {
+  const len = msg.length;
+  const bitLen = len * 8;
+  const padLen = (((len + 9) + 63) & ~63);
+  const buf = new ArrayBuffer(padLen);
+  const padded = new Uint8Array(buf);
+  padded.set(msg);
+  padded[len] = 0x80;
+  const dv = new DataView(buf);
+  dv.setUint32(padLen - 8, bitLen & 0xffffffff, true);
+  dv.setUint32(padLen - 4, Math.floor(bitLen / 0x100000000), true);
+
+  let h0=0x67452301, h1=0xefcdab89, h2=0x98badcfe, h3=0x10325476, h4=0xc3d2e1f0;
+
+  for (let off = 0; off < padLen; off += 64) {
+    const w = new Uint32Array(16);
+    for (let i = 0; i < 16; i++) w[i] = dv.getUint32(off + i * 4, true);
+
+    let al=h0, bl=h1, cl=h2, dl=h3, el=h4;
+    let ar=h0, br=h1, cr=h2, dr=h3, er=h4;
+
+    for (let j = 0; j < 80; j++) {
+      const rnd = j >>> 4;
+      let tl = (al + rmdF(j, bl, cl, dl) + w[RMD_RL[j]] + RMD_KL[rnd]) >>> 0;
+      tl = (rotl32(tl, RMD_SL[j]) + el) >>> 0;
+      al=el; el=dl; dl=rotl32(cl,10); cl=bl; bl=tl;
+
+      let tr = (ar + rmdF(79-j, br, cr, dr) + w[RMD_RR[j]] + RMD_KR[rnd]) >>> 0;
+      tr = (rotl32(tr, RMD_SR[j]) + er) >>> 0;
+      ar=er; er=dr; dr=rotl32(cr,10); cr=br; br=tr;
+    }
+    const t = (h1 + cl + dr) >>> 0;
+    h1 = (h2 + dl + er) >>> 0;
+    h2 = (h3 + el + ar) >>> 0;
+    h3 = (h4 + al + br) >>> 0;
+    h4 = (h0 + bl + cr) >>> 0;
+    h0 = t;
+  }
+  const res = new Uint8Array(20);
+  const rv = new DataView(res.buffer);
+  rv.setUint32(0,h0,true); rv.setUint32(4,h1,true); rv.setUint32(8,h2,true);
+  rv.setUint32(12,h3,true); rv.setUint32(16,h4,true);
+  return res;
+}
+
+function hash160(data) { return ripemd160(sha256(data)); }
+
+/* ================================================================
+   SECTION 3 — Base58 / Base58Check
+   ================================================================ */
+const B58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+const B58_MAP = new Uint8Array(128).fill(255);
+for (let i = 0; i < 58; i++) B58_MAP[B58_ALPHABET.charCodeAt(i)] = i;
+
+function base58Encode(bytes) {
+  let zeros = 0;
+  for (const b of bytes) { if (b === 0) zeros++; else break; }
+  let num = bytesToBigInt(bytes);
+  let str = '';
+  while (num > 0n) { str = B58_ALPHABET[Number(num % 58n)] + str; num /= 58n; }
+  return '1'.repeat(zeros) + str;
+}
+
+function base58Decode(str) {
+  let ones = 0;
+  for (const c of str) { if (c === '1') ones++; else break; }
+  let num = 0n;
+  for (const c of str) {
+    const idx = B58_MAP[c.charCodeAt(0)];
+    if (idx === undefined || idx === 255) throw new Error('Invalid Base58 character: ' + c);
+    num = num * 58n + BigInt(idx);
+  }
+  const hex = num === 0n ? '' : num.toString(16);
+  const hexPad = hex.length % 2 ? '0' + hex : hex;
+  const dataBytes = hexPad.length ? hexToBytes(hexPad) : new Uint8Array(0);
+  const result = new Uint8Array(ones + dataBytes.length);
+  result.set(dataBytes, ones);
+  return result;
+}
+
+function base58CheckEncode(version, payload) {
+  const data = new Uint8Array(1 + payload.length);
+  data[0] = version;
+  data.set(payload, 1);
+  const checksum = doubleSha256(data).slice(0, 4);
+  const full = new Uint8Array(data.length + 4);
+  full.set(data); full.set(checksum, data.length);
+  return base58Encode(full);
+}
+
+function base58CheckDecode(str) {
+  const bytes = base58Decode(str);
+  if (bytes.length < 5) throw new Error('Base58Check string too short');
+  const payload = bytes.slice(0, bytes.length - 4);
+  const checksum = bytes.slice(bytes.length - 4);
+  const expected = doubleSha256(payload).slice(0, 4);
+  for (let i = 0; i < 4; i++) {
+    if (checksum[i] !== expected[i]) throw new Error('Invalid Base58Check checksum');
+  }
+  return { version: payload[0], data: payload.slice(1) };
+}
+
+/* ================================================================
+   SECTION 4 — secp256k1 Elliptic Curve (Jacobian coordinates)
+   ================================================================ */
+const CURVE_P = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2Fn;
+const CURVE_N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141n;
+const CURVE_Gx = 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798n;
+const CURVE_Gy = 0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8n;
+
+function mod(a, m) { if (m === undefined) m = CURVE_P; const r = a % m; return r >= 0n ? r : r + m; }
+
+function modInverse(a, m) {
+  if (m === undefined) m = CURVE_P;
+  a = mod(a, m);
+  if (a === 0n) throw new Error('Cannot invert zero');
+  let [old_r, r] = [a, m];
+  let [old_s, s] = [1n, 0n];
+  while (r !== 0n) {
+    const q = old_r / r;
+    [old_r, r] = [r, old_r - q * r];
+    [old_s, s] = [s, old_s - q * s];
+  }
+  return mod(old_s, m);
+}
+
+/* Jacobian point: [X, Y, Z]  — represents affine (X/Z², Y/Z³) */
+function jacDouble(p) {
+  const [X, Y, Z] = p;
+  if (Y === 0n || Z === 0n) return [0n, 1n, 0n];
+  const Y2 = mod(Y * Y);
+  const S  = mod(4n * X * Y2);
+  const M  = mod(3n * X * X);                   // a=0 for secp256k1
+  const X3 = mod(M * M - 2n * S);
+  const Y3 = mod(M * (S - X3) - 8n * Y2 * Y2);
+  const Z3 = mod(2n * Y * Z);
+  return [X3, Y3, Z3];
+}
+
+function jacAdd(p, q) {
+  const [X1, Y1, Z1] = p;
+  const [X2, Y2, Z2] = q;
+  if (Z1 === 0n) return q;
+  if (Z2 === 0n) return p;
+  const Z1Z1 = mod(Z1 * Z1), Z2Z2 = mod(Z2 * Z2);
+  const U1 = mod(X1 * Z2Z2), U2 = mod(X2 * Z1Z1);
+  const S1 = mod(Y1 * Z2 * Z2Z2), S2 = mod(Y2 * Z1 * Z1Z1);
+  const H = mod(U2 - U1), R = mod(S2 - S1);
+  if (H === 0n) return R === 0n ? jacDouble(p) : [0n, 1n, 0n];
+  const HH = mod(H * H), HHH = mod(H * HH);
+  const X3 = mod(R * R - HHH - 2n * U1 * HH);
+  const Y3 = mod(R * (U1 * HH - X3) - S1 * HHH);
+  const Z3 = mod(H * Z1 * Z2);
+  return [X3, Y3, Z3];
+}
+
+function jacMultiply(k, P) {
+  if (k === 0n) return [0n, 1n, 0n];
+  let result = [0n, 1n, 0n];
+  let current = P;
+  let scalar = k;
+  while (scalar > 0n) {
+    if (scalar & 1n) result = jacAdd(result, current);
+    current = jacDouble(current);
+    scalar >>= 1n;
+  }
+  return result;
+}
+
+function toAffine(p) {
+  const [X, Y, Z] = p;
+  if (Z === 0n) return null;
+  const inv = modInverse(Z);
+  const inv2 = mod(inv * inv);
+  const inv3 = mod(inv2 * inv);
+  return [mod(X * inv2), mod(Y * inv3)];
+}
+
+function getPublicKey(privBytes) {
+  const k = bytesToBigInt(privBytes);
+  if (k === 0n || k >= CURVE_N) throw new Error('Private key out of valid range');
+  const G = [CURVE_Gx, CURVE_Gy, 1n];
+  const pt = toAffine(jacMultiply(k, G));
+  if (!pt) throw new Error('Invalid result');
+  const [x, y] = pt;
+  const prefix = (y & 1n) === 0n ? 0x02 : 0x03;
+  const compressed = new Uint8Array(33);
+  compressed[0] = prefix;
+  compressed.set(bigIntToBytes(x, 32), 1);
+  const uncompressed = new Uint8Array(65);
+  uncompressed[0] = 0x04;
+  uncompressed.set(bigIntToBytes(x, 32), 1);
+  uncompressed.set(bigIntToBytes(y, 32), 33);
+  return { compressed, uncompressed };
+}
+
+/* ================================================================
+   SECTION 5 — Bech32 / Bech32m (BIP-173 / BIP-350)
+   ================================================================ */
+const BECH32_CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+
+function bech32Polymod(values) {
+  const GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+  let chk = 1;
+  for (const v of values) {
+    const b = chk >>> 25;
+    chk = ((chk & 0x1ffffff) << 5) ^ v;
+    for (let i = 0; i < 5; i++) if ((b >>> i) & 1) chk ^= GEN[i];
+  }
+  return chk;
+}
+
+function bech32HrpExpand(hrp) {
+  const r = [];
+  for (let i = 0; i < hrp.length; i++) r.push(hrp.charCodeAt(i) >> 5);
+  r.push(0);
+  for (let i = 0; i < hrp.length; i++) r.push(hrp.charCodeAt(i) & 31);
+  return r;
+}
+
+function bech32Checksum(hrp, data, spec) {
+  const enc = spec === 'bech32m' ? 0x2bc830a3 : 1;
+  const vals = bech32HrpExpand(hrp).concat(data).concat([0,0,0,0,0,0]);
+  const pm = bech32Polymod(vals) ^ enc;
+  const cs = [];
+  for (let i = 0; i < 6; i++) cs.push((pm >>> (5*(5-i))) & 31);
+  return cs;
+}
+
+function bech32Encode(hrp, data, spec) {
+  const combined = data.concat(bech32Checksum(hrp, data, spec || 'bech32'));
+  let r = hrp + '1';
+  for (const d of combined) r += BECH32_CHARSET[d];
+  return r;
+}
+
+function convertBits(data, fromBits, toBits, pad) {
+  let acc = 0, bits = 0;
+  const res = [], maxV = (1 << toBits) - 1;
+  for (const val of data) {
+    acc = (acc << fromBits) | val;
+    bits += fromBits;
+    while (bits >= toBits) { bits -= toBits; res.push((acc >>> bits) & maxV); }
+  }
+  if (pad && bits > 0) res.push((acc << (toBits - bits)) & maxV);
+  return res;
+}
+
+function segwitAddr(hrp, witnessVer, prog) {
+  const spec = witnessVer === 0 ? 'bech32' : 'bech32m';
+  const data = [witnessVer].concat(convertBits(Array.from(prog), 8, 5, true));
+  return bech32Encode(hrp, data, spec);
+}
+
+/* ================================================================
+   SECTION 6 — Byte / Hex / BigInt utilities
+   ================================================================ */
+function bytesToHex(bytes) {
+  let s = '';
+  for (const b of bytes) s += b.toString(16).padStart(2, '0');
+  return s;
+}
+
+function hexToBytes(hex) {
+  if (hex.length % 2) hex = '0' + hex;
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.substr(i*2, 2), 16);
+  return bytes;
+}
+
+function bytesToBigInt(bytes) {
+  let n = 0n;
+  for (const b of bytes) n = (n << 8n) | BigInt(b);
+  return n;
+}
+
+function bigIntToBytes(n, len) {
+  const bytes = new Uint8Array(len);
+  for (let i = len - 1; i >= 0; i--) { bytes[i] = Number(n & 0xFFn); n >>= 8n; }
+  return bytes;
+}
+
+function bytesToBase64(bytes) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  let r = '', i;
+  for (i = 0; i + 2 < bytes.length; i += 3) {
+    const n = (bytes[i] << 16) | (bytes[i+1] << 8) | bytes[i+2];
+    r += chars[(n >> 18) & 63] + chars[(n >> 12) & 63] + chars[(n >> 6) & 63] + chars[n & 63];
+  }
+  if (i < bytes.length) {
+    const remaining = bytes.length - i;
+    if (remaining === 1) {
+      const n = bytes[i] << 16;
+      r += chars[(n >> 18) & 63] + chars[(n >> 12) & 63] + '==';
+    } else {
+      const n = (bytes[i] << 16) | (bytes[i+1] << 8);
+      r += chars[(n >> 18) & 63] + chars[(n >> 12) & 63] + chars[(n >> 6) & 63] + '=';
+    }
+  }
+  return r;
+}
+
+function base64ToBytes(str) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  str = str.replace(/=+$/, '');
+  const out = [];
+  let bits = 0, value = 0;
+  for (const c of str) {
+    const idx = chars.indexOf(c);
+    if (idx === -1) throw new Error('Invalid Base64 character');
+    value = (value << 6) | idx;
+    bits += 6;
+    if (bits >= 8) { bits -= 8; out.push((value >>> bits) & 0xff); }
+  }
+  return new Uint8Array(out);
+}
+
+function bytesToBinary(bytes) {
+  let s = '';
+  for (const b of bytes) s += b.toString(2).padStart(8, '0');
+  return s;
+}
+
+function binaryToBytes(bin) {
+  if (bin.length % 8) throw new Error('Binary string length must be multiple of 8');
+  const bytes = new Uint8Array(bin.length / 8);
+  for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(bin.substr(i*8, 8), 2);
+  return bytes;
+}
+
+/* ================================================================
+   SECTION 7 — Format Detection
+   ================================================================ */
+function detectFormat(input) {
+  input = input.trim();
+  if (!input) return null;
+
+  // Binary — exactly 256 chars of 0/1
+  if (/^[01]{256}$/.test(input)) return { id: 'binary', label: 'Binary (256-bit)' };
+
+  // Hex — 64 hex chars (optionally 0x prefixed)
+  if (/^(0x)?[0-9a-fA-F]{64}$/.test(input)) return { id: 'hex', label: 'Hexadecimal' };
+
+  // WIF Mainnet Compressed (K or L, 52 chars)
+  if (/^[KL][1-9A-HJ-NP-Za-km-z]{51}$/.test(input)) return { id: 'wif-compressed', label: 'WIF Compressed', testnet: false };
+
+  // WIF Mainnet Uncompressed (5, 51 chars)
+  if (/^5[1-9A-HJ-NP-Za-km-z]{50}$/.test(input)) return { id: 'wif-uncompressed', label: 'WIF Uncompressed', testnet: false };
+
+  // WIF Testnet Compressed (c, 52 chars)
+  if (/^c[1-9A-HJ-NP-Za-km-z]{51}$/.test(input)) return { id: 'wif-compressed', label: 'WIF Compressed (Testnet)', testnet: true };
+
+  // WIF Testnet Uncompressed (9, 51 chars)
+  if (/^9[1-9A-HJ-NP-Za-km-z]{50}$/.test(input)) return { id: 'wif-uncompressed', label: 'WIF Uncompressed (Testnet)', testnet: true };
+
+  // Base64 — 44 chars ending with = or 43 base64 chars
+  if (/^[A-Za-z0-9+/]{43}={0,1}$/.test(input)) {
+    try { const b = base64ToBytes(input); if (b.length === 32) return { id: 'base64', label: 'Base64' }; } catch {}
+  }
+
+  // Mini private key (starts with S, 22 or 30 chars)
+  if (/^S[1-9A-HJ-NP-Za-km-z]{21}$/.test(input) || /^S[1-9A-HJ-NP-Za-km-z]{29}$/.test(input)) {
+    // Validate: SHA256(key + "?")[0] must be 0x00
+    const check = sha256(new TextEncoder().encode(input + '?'));
+    if (check[0] === 0x00) return { id: 'mini', label: 'Mini Private Key' };
+  }
+
+  // Decimal — all digits, 1-78 chars (check AFTER hex to avoid ambiguity with 64-digit numbers)
+  if (/^[0-9]{1,78}$/.test(input)) {
+    try {
+      const n = BigInt(input);
+      if (n >= 1n && n < CURVE_N) return { id: 'decimal', label: 'Decimal' };
+    } catch {}
+  }
+
+  return { id: 'unknown', label: 'Unknown Format' };
+}
+
+/* ================================================================
+   SECTION 8 — Conversion Engine
+   ================================================================ */
+function inputToBytes(input, format) {
+  input = input.trim();
+  switch (format.id) {
+    case 'hex': {
+      const clean = input.startsWith('0x') ? input.slice(2) : input;
+      return hexToBytes(clean);
+    }
+    case 'wif-compressed':
+    case 'wif-uncompressed': {
+      const { data } = base58CheckDecode(input);
+      if (format.id === 'wif-compressed') {
+        if (data.length !== 33 || data[32] !== 0x01) throw new Error('Invalid WIF compressed data');
+        return data.slice(0, 32);
+      } else {
+        if (data.length !== 32) throw new Error('Invalid WIF uncompressed data');
+        return data;
+      }
+    }
+    case 'base64':
+      return base64ToBytes(input);
+    case 'decimal': {
+      const n = BigInt(input);
+      return bigIntToBytes(n, 32);
+    }
+    case 'binary':
+      return binaryToBytes(input);
+    case 'mini': {
+      return sha256(new TextEncoder().encode(input));
+    }
+    default:
+      throw new Error('Unsupported format');
+  }
+}
+
+function validateKey(bytes) {
+  if (bytes.length !== 32) return 'Private key must be exactly 32 bytes';
+  const n = bytesToBigInt(bytes);
+  if (n === 0n) return 'Private key cannot be zero';
+  if (n >= CURVE_N) return 'Private key exceeds curve order (invalid)';
+  return null; // valid
+}
+
+function convertAll(keyBytes, testnet) {
+  const hex = bytesToHex(keyBytes);
+  const versionByte = testnet ? 0xEF : 0x80;
+
+  // WIF Compressed
+  const wifCPayload = new Uint8Array(33);
+  wifCPayload.set(keyBytes); wifCPayload[32] = 0x01;
+  const wifCompressed = base58CheckEncode(versionByte, wifCPayload);
+
+  // WIF Uncompressed
+  const wifUncompressed = base58CheckEncode(versionByte, keyBytes);
+
+  const b64 = bytesToBase64(keyBytes);
+  const decimal = bytesToBigInt(keyBytes).toString(10);
+  const binary = bytesToBinary(keyBytes);
+
+  return { hex, wifCompressed, wifUncompressed, base64: b64, decimal, binary };
+}
+
+function deriveAddresses(keyBytes, testnet) {
+  const pub = getPublicKey(keyBytes);
+  const hrp = testnet ? 'tb' : 'bc';
+  const p2pkhVersion = testnet ? 0x6F : 0x00;
+  const p2shVersion  = testnet ? 0xC4 : 0x05;
+
+  // P2PKH — Hash160 of compressed pubkey
+  const h160 = hash160(pub.compressed);
+  const p2pkh = base58CheckEncode(p2pkhVersion, h160);
+
+  // P2SH-P2WPKH — redeemScript = OP_0 OP_PUSH20 <Hash160(compressedPubKey)>
+  const redeemScript = new Uint8Array(22);
+  redeemScript[0] = 0x00; redeemScript[1] = 0x14;
+  redeemScript.set(h160, 2);
+  const p2sh = base58CheckEncode(p2shVersion, hash160(redeemScript));
+
+  // Bech32 P2WPKH
+  const bech32Addr = segwitAddr(hrp, 0, h160);
+
+  return {
+    pubCompressed: bytesToHex(pub.compressed),
+    pubUncompressed: bytesToHex(pub.uncompressed),
+    p2pkh,
+    p2sh,
+    bech32: bech32Addr
+  };
+}
+
+/* ================================================================
+   SECTION 9 — Entropy calculation
+   ================================================================ */
+function calcEntropy(bytes) {
+  if (!bytes || !bytes.length) return 0;
+  const freq = new Array(256).fill(0);
+  for (const b of bytes) freq[b]++;
+  let entropy = 0;
+  for (let i = 0; i < 256; i++) {
+    if (freq[i] > 0) {
+      const p = freq[i] / bytes.length;
+      entropy -= p * Math.log2(p);
+    }
+  }
+  return entropy * bytes.length;
+}
+
+/* ================================================================
+   SECTION 10 — UI Logic
+   ================================================================ */
+const OUTPUT_FORMATS = [
+  { id: 'hex', key: 'hex', label: 'Hexadecimal', color: '#3b82f6', tooltip: 'Raw 256-bit key as 64 hex characters' },
+  { id: 'wif-c', key: 'wifCompressed', label: 'WIF (Compressed)', color: '#f7931a', tooltip: 'Wallet Import Format — compressed public key (52 chars)' },
+  { id: 'wif-u', key: 'wifUncompressed', label: 'WIF (Uncompressed)', color: '#f59e0b', tooltip: 'Wallet Import Format — uncompressed public key (51 chars)' },
+  { id: 'b64',  key: 'base64', label: 'Base64', color: '#a855f7', tooltip: 'Standard Base64 encoding of 32 bytes' },
+  { id: 'dec',  key: 'decimal', label: 'Decimal', color: '#22c55e', tooltip: 'Numeric decimal representation (up to 78 digits)' },
+  { id: 'bin',  key: 'binary', label: 'Binary', color: '#06b6d4', tooltip: '256-bit binary string (0s and 1s)' },
+];
+
+const DERIVED_FIELDS = [
+  { id: 'pubC',   key: 'pubCompressed',   label: 'Public Key (Compressed)',   tooltip: '33 bytes — 02/03 prefix + x-coordinate' },
+  { id: 'pubU',   key: 'pubUncompressed', label: 'Public Key (Uncompressed)', tooltip: '65 bytes — 04 prefix + x + y coordinates' },
+  { id: 'p2pkh',  key: 'p2pkh',           label: 'P2PKH Address (Legacy)',    tooltip: 'Starts with 1 (mainnet) or m/n (testnet)' },
+  { id: 'p2sh',   key: 'p2sh',            label: 'P2SH-P2WPKH Address',      tooltip: 'Nested SegWit — starts with 3 (mainnet) or 2 (testnet)' },
+  { id: 'bech32', key: 'bech32',          label: 'Bech32 Address (SegWit)',   tooltip: 'Native SegWit — starts with bc1q (mainnet) or tb1q (testnet)' },
+];
+
+/* Build output cards */
+const outputsGrid = document.getElementById('outputsGrid');
+OUTPUT_FORMATS.forEach(f => {
+  const card = document.createElement('div');
+  card.className = 'format-card';
+  card.style.setProperty('--card-accent', f.color);
+  card.innerHTML =
+    '<div class="card-header">' +
+      '<span class="card-label" data-tooltip="' + f.tooltip + '">' + f.label +
+        ' <i class="info-icon">?</i></span>' +
+      '<button class="copy-btn" data-key="' + f.key + '" title="Copy">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+          '<rect x="9" y="9" width="13" height="13" rx="2"/>' +
+          '<path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>' +
+        '</svg> <span class="copy-label">Copy</span></button>' +
+    '</div>' +
+    '<div class="card-value empty" id="out-' + f.key + '">—</div>';
+  outputsGrid.appendChild(card);
+});
+
+/* Build derived cards */
+const derivedGrid = document.getElementById('derivedGrid');
+DERIVED_FIELDS.forEach(f => {
+  const card = document.createElement('div');
+  card.className = 'derived-card';
+  card.innerHTML =
+    '<div class="card-header">' +
+      '<span class="card-label" data-tooltip="' + f.tooltip + '">' + f.label +
+        ' <i class="info-icon">?</i></span>' +
+      '<button class="copy-btn" data-key="derived-' + f.key + '" title="Copy">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+          '<rect x="9" y="9" width="13" height="13" rx="2"/>' +
+          '<path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>' +
+        '</svg> <span class="copy-label">Copy</span></button>' +
+    '</div>' +
+    '<div class="card-value empty" id="out-derived-' + f.key + '">—</div>';
+  derivedGrid.appendChild(card);
+});
+
+/* State */
+let currentKeyBytes = null;
+let valuesHidden = false;
+let derivedOpen = false;
+const storedValues = {};
+
+/* Elements */
+const keyInput = document.getElementById('keyInput');
+const formatBadge = document.getElementById('formatBadge');
+const validationMsg = document.getElementById('validationMsg');
+const entropyContainer = document.getElementById('entropyContainer');
+const entropyFill = document.getElementById('entropyFill');
+const entropyValue = document.getElementById('entropyValue');
+const generateBtn = document.getElementById('generateBtn');
+const clearBtn = document.getElementById('clearBtn');
+const visibilityBtn = document.getElementById('visibilityBtn');
+const visLabel = document.getElementById('visLabel');
+const derivedToggle = document.getElementById('derivedToggle');
+const derivedContent = document.getElementById('derivedContent');
+const statusText = document.getElementById('statusText');
+const warningBanner = document.getElementById('warningBanner');
+
+/* Network */
+function getNetwork() {
+  return document.querySelector('input[name="network"]:checked').value;
+}
+
+/* Show / hide toggle */
+visibilityBtn.addEventListener('click', () => {
+  valuesHidden = !valuesHidden;
+  visLabel.textContent = valuesHidden ? 'Show Values' : 'Hide Values';
+  document.querySelectorAll('.card-value').forEach(el => {
+    if (!el.classList.contains('empty')) el.classList.toggle('blurred', valuesHidden);
+  });
+});
+
+/* Derived toggle */
+derivedToggle.addEventListener('click', () => {
+  derivedOpen = !derivedOpen;
+  derivedToggle.classList.toggle('open', derivedOpen);
+  derivedContent.classList.toggle('show', derivedOpen);
+  if (derivedOpen && currentKeyBytes) computeDerived();
+});
+
+/* Copy handler (delegated) */
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.copy-btn');
+  if (!btn) return;
+  const key = btn.dataset.key;
+  const value = storedValues[key];
+  if (!value) return;
+  navigator.clipboard.writeText(value).then(() => {
+    const label = btn.querySelector('.copy-label');
+    btn.classList.add('copied');
+    label.textContent = 'Copied!';
+    setTimeout(() => { btn.classList.remove('copied'); label.textContent = 'Copy'; }, 1800);
+  }).catch(() => {
+    /* Fallback for insecure contexts */
+    const ta = document.createElement('textarea');
+    ta.value = value; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch {}
+    document.body.removeChild(ta);
+    const label = btn.querySelector('.copy-label');
+    btn.classList.add('copied');
+    label.textContent = 'Copied!';
+    setTimeout(() => { btn.classList.remove('copied'); label.textContent = 'Copy'; }, 1800);
+  });
+});
+
+/* Network change → re-convert */
+document.querySelectorAll('input[name="network"]').forEach(radio => {
+  radio.addEventListener('change', () => { if (currentKeyBytes) processKey(currentKeyBytes); });
+});
+
+/* Set output field */
+function setOutput(id, value) {
+  const el = document.getElementById('out-' + id);
+  if (!el) return;
+  storedValues[id] = value || '';
+  if (value) {
+    el.textContent = value;
+    el.classList.remove('empty');
+    el.classList.toggle('blurred', valuesHidden);
+  } else {
+    el.textContent = '—';
+    el.classList.add('empty');
+    el.classList.remove('blurred');
+  }
+}
+
+/* Clear all outputs */
+function clearOutputs() {
+  OUTPUT_FORMATS.forEach(f => setOutput(f.key, ''));
+  DERIVED_FIELDS.forEach(f => setOutput('derived-' + f.key, ''));
+}
+
+/* Process key bytes */
+function processKey(keyBytes) {
+  currentKeyBytes = keyBytes;
+  const testnet = getNetwork() === 'testnet';
+  const result = convertAll(keyBytes, testnet);
+
+  setOutput('hex', result.hex);
+  setOutput('wifCompressed', result.wifCompressed);
+  setOutput('wifUncompressed', result.wifUncompressed);
+  setOutput('base64', result.base64);
+  setOutput('decimal', result.decimal);
+  setOutput('binary', result.binary);
+
+  // Entropy
+  const ent = calcEntropy(keyBytes);
+  entropyContainer.classList.add('show');
+  const pct = Math.min(100, (ent / 256) * 100);
+  entropyFill.style.width = pct + '%';
+  entropyFill.style.background = pct < 50 ? '#ef4444' : pct < 75 ? '#f59e0b' : '#22c55e';
+  entropyValue.textContent = '~' + ent.toFixed(1) + ' / 256 bits';
+
+  // Derived
+  if (derivedOpen) computeDerived();
+}
+
+/* Compute derived (expensive) */
+function computeDerived() {
+  if (!currentKeyBytes) return;
+  try {
+    const testnet = getNetwork() === 'testnet';
+    const derived = deriveAddresses(currentKeyBytes, testnet);
+    setOutput('derived-pubCompressed', derived.pubCompressed);
+    setOutput('derived-pubUncompressed', derived.pubUncompressed);
+    setOutput('derived-p2pkh', derived.p2pkh);
+    setOutput('derived-p2sh', derived.p2sh);
+    setOutput('derived-bech32', derived.bech32);
+  } catch (err) {
+    DERIVED_FIELDS.forEach(f => setOutput('derived-' + f.key, 'Error: ' + err.message));
+  }
+}
+
+/* Main input handler */
+function handleInput() {
+  const raw = keyInput.value;
+  const input = raw.trim();
+
+  if (!input) {
+    formatBadge.textContent = '';
+    formatBadge.className = 'format-badge';
+    validationMsg.className = 'validation';
+    entropyContainer.classList.remove('show');
+    clearOutputs();
+    currentKeyBytes = null;
+    return;
+  }
+
+  const detected = detectFormat(input);
+  if (!detected || detected.id === 'unknown') {
+    formatBadge.textContent = 'Unknown Format';
+    formatBadge.className = 'format-badge error';
+    validationMsg.textContent = 'Could not detect key format. Supported: Hex (64 chars), WIF, Base64, Decimal, Binary (256 bits), Mini key.';
+    validationMsg.className = 'validation show invalid';
+    clearOutputs();
+    currentKeyBytes = null;
+    return;
+  }
+
+  formatBadge.textContent = detected.label;
+  formatBadge.className = 'format-badge detected';
+
+  // If WIF detection set testnet, switch radio
+  if (detected.testnet === true) {
+    document.querySelector('input[name="network"][value="testnet"]').checked = true;
+  } else if (detected.testnet === false) {
+    document.querySelector('input[name="network"][value="mainnet"]').checked = true;
+  }
+
+  try {
+    const keyBytes = inputToBytes(input, detected);
+    const err = validateKey(keyBytes);
+    if (err) {
+      validationMsg.textContent = err;
+      validationMsg.className = 'validation show invalid';
+      clearOutputs();
+      currentKeyBytes = null;
+      return;
+    }
+    validationMsg.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Valid private key detected (' + detected.label + ')';
+    validationMsg.className = 'validation show valid';
+    processKey(keyBytes);
+  } catch (err) {
+    validationMsg.textContent = 'Error: ' + err.message;
+    validationMsg.className = 'validation show invalid';
+    clearOutputs();
+    currentKeyBytes = null;
+  }
+}
+
+keyInput.addEventListener('input', handleInput);
+
+/* Generate random key */
+generateBtn.addEventListener('click', () => {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  // Ensure valid range
+  const n = bytesToBigInt(bytes);
+  if (n === 0n || n >= CURVE_N) { generateBtn.click(); return; } // extremely unlikely, retry
+  keyInput.value = bytesToHex(bytes);
+  handleInput();
+});
+
+/* Clear All */
+function clearAll() {
+  keyInput.value = '';
+  currentKeyBytes = null;
+  formatBadge.textContent = '';
+  formatBadge.className = 'format-badge';
+  validationMsg.className = 'validation';
+  entropyContainer.classList.remove('show');
+  clearOutputs();
+  // Wipe stored values
+  for (const k in storedValues) storedValues[k] = '';
+  // Overwrite any leftover byte arrays with random data then zero
+  const wipe = new Uint8Array(32);
+  crypto.getRandomValues(wipe);
+  wipe.fill(0);
+}
+clearBtn.addEventListener('click', clearAll);
+
+/* Panic shortcut: Ctrl+Shift+Delete */
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.shiftKey && e.key === 'Delete') {
+    e.preventDefault();
+    clearAll();
+  }
+});
+
+/* Wipe on page unload */
+window.addEventListener('beforeunload', clearAll);
+
+/* Disable all input autocomplete and spellcheck */
+document.querySelectorAll('input, textarea').forEach(el => {
+  el.setAttribute('autocomplete', 'off');
+  el.setAttribute('spellcheck', 'false');
+});
+
+</script>
+</body>
+</html>
